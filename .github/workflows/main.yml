@@ -1,0 +1,22 @@
+name: 'C++ CI'
+
+on:
+  push:
+    branches:
+      - main
+      - feature/github_actions
+
+jobs:
+  build:
+    runs-on: 'ubuntu-20.04'
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version:  '5.15.2'
+
+      - name: Build Messenger
+        shell: pwsh
+        run: scripts/build.ps1
