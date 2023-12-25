@@ -99,15 +99,13 @@ void MainWindow::slotReadClient()
 						QString str = splitName.first() + QTime::currentTime().toString() + "." + splitName.last();
 						QFile file(str.replace(":", "_"));
 						file.open(QIODevice::WriteOnly | QFile::Append);
+						m_socketMap.value(fromID)->waitForReadyRead(1000);
 
-						if (m_socketMap.value(toID)->waitForReadyRead())
-						{
-							QByteArray tmpBlock;
-							in >> tmpBlock;
-							qint64 toFile = file.write(tmpBlock);
-							sizeReceivedData += toFile;
-							tmpBlock.clear();
-						}
+						QByteArray tmpBlock;
+						in >> tmpBlock;
+						qint64 toFile = file.write(tmpBlock);
+						sizeReceivedData += toFile;
+						tmpBlock.clear();
 
 						file.close();
 					}
