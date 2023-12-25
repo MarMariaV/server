@@ -17,13 +17,19 @@ public:
 
 private:
 	enum eCodes {
-		eConnected = 1,
+		eNo,
+		eMessage,
+		eFile,
+		eConnected,
 		eDisconnected,
 		eTyping,
 	};
 
 	QTcpServer* m_server;
 	quint16		m_blockSize;
+	QString filePath;
+	quint16 fileSize;
+	quint16 sizeReceivedData;
 	int		m_port;
 	Ui::MainWindowClass ui;
 	QMap<int, QTcpSocket*> m_socketMap;
@@ -33,7 +39,6 @@ private:
 public slots:
 	virtual void slotNewConnection();
 	void slotClientDisconnected();
-	// почему virtual?
 	void slotReadClient();
 
 };

@@ -3,6 +3,7 @@
 #include <QTcpSocket>
 #include <QTime>
 #include <QMap>
+#include <QFile>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -13,6 +14,7 @@ MainWindow::MainWindow(QWidget *parent)
 	m_server = new QTcpServer(this);
 	m_blockSize = 0;
 	m_port = 1111;
+	sizeReceivedData = 0;
 
 	if (!m_server->listen(QHostAddress::Any, m_port))
 	{
@@ -31,13 +33,10 @@ MainWindow::~MainWindow()
 
 void MainWindow::sendToClient(QTcpSocket* socket, const QString& str, quint16 fromID, quint16 code)
 {
-	QByteArray arrBlock;
-	QDataStream out(&arrBlock, QIODevice::WriteOnly);
-	out.setVersion(QDataStream::Qt_5_3);
-	out << quint16(0) << QTime::currentTime() << fromID << code << str;
-	out.device()->seek(0);
-	out << quint16(arrBlock.size() - sizeof(quint16));
-	socket->write(arrBlock);
+	QDataStream stream(socket);
+	stream.setVersion(QDataStream::Qt_DefaultCompiledVersion);
+	auto a = m_socketMap.key(socket);
+	stream << QTime::currentTime() << fromID << code << str;
 }
 
 void MainWindow::slotNewConnection()
@@ -64,27 +63,16 @@ void MainWindow::slotReadClient()
 {
 	QTcpSocket* clientSocket = (QTcpSocket*)sender();
 	QDataStream in(clientSocket);
-	in.setVersion(QDataStream::Qt_5_3);
-	for (;;) {
-		if (!m_blockSize) {
-			if (clientSocket->bytesAvailable() < sizeof(quint16)) {
-				break;
-			}
-			in >> m_blockSize;
-		}
+	in.setVersion(QDataStream::Qt_DefaultCompiledVersion);
 
-		int a = clientSocket->bytesAvailable();
-
-		if (clientSocket->bytesAvailable() < m_blockSize) {
-			break;
-		}
-
+	while (!in.atEnd())
+	{
 		QTime time;
 		QString str;
 		quint16 fromID, toID, code;
-		in >> time >> fromID >> toID >> code >> str;
+		in >> time >> fromID >> toID >> code ;
 
-		if (0 == toID) {
+		if (0 == toID && fromID != 0) {
 			m_socketMap[fromID] = clientSocket;
 			ui.textEdit->append("Connected " + QString::number(fromID));
 			for (const auto & socket : m_socketMap) {
@@ -94,11 +82,44 @@ void MainWindow::slotReadClient()
 		}
 		else {
 			if (m_socketMap.find(toID) != m_socketMap.end()) {
-				QString strMessage = str;
-				sendToClient(m_socketMap.value(toID), strMessage, fromID, code);
+				switch (code)
+				{
+				case eMessage: case eTyping: {
+					QString strMessage;
+					in >> strMessage;
+					sendToClient(m_socketMap.value(toID), strMessage, fromID, code);
+					break;
+				}
+				case eFile: {
+					in >> filePath >> fileSize;
+
+					if (sizeReceivedData < fileSize)
+					{
+						auto splitName = filePath.split(".");
+						QString str = splitName.first() + QTime::currentTime().toString() + "." + splitName.last();
+						QFile file(str.replace(":", "_"));
+						file.open(QIODevice::WriteOnly | QFile::Append);
+
+						if (m_socketMap.value(toID)->waitForReadyRead())
+						{
+							QByteArray tmpBlock;
+							in >> tmpBlock;
+							qint64 toFile = file.write(tmpBlock);
+							sizeReceivedData += toFile;
+							tmpBlock.clear();
+						}
+
+						file.close();
+					}
+					filePath.clear();
+					fileSize = 0;
+					sizeReceivedData = 0;
+					break;
+				}
+				default: break;
+				}
 			}
 		}
-
-		m_blockSize = 0;
 	}
+
 }
